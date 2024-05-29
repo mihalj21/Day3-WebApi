@@ -8,26 +8,13 @@ namespace Example.WebApi.Controllers
 
     public class FootBallPlayerController: ControllerBase   
     {
-
-
-        private static readonly string[] FirstName = new[]
-       {
-            "Matko", "Mihovil", "Ivan", "Josip", "Messi", "Cristiano", "Sven", "Leon", "Matej", "Petar"
-        };
-
-        private static readonly string[] LastName = new[]
-      {
-            "Mihalj", "Leskovic", "Lovric", "Knezevic", "Bolic", "marek", "Petrovic", "Calis", "Guzvic", "Rozing"
-        };
-        private static readonly string[] Nationality = new[]
-      {
-            "Hrvat", "Spanjolac", "Srbin", "Makedonac", "Englez", "Švabo", "amerkinanac", "Japanac", "Indijac", "Kinez"
-        };
-        private static readonly string[] Club = new[]
-      {
-            "Barcelona", "real madrid", "City", "Bayern", "Chelsea", "United", "Dinamno", "Hajduk", "Osijek", "Rijeka"
-        };
         
+        private static List<FootballPlayer> players = new List<FootballPlayer>
+        {
+            new FootballPlayer { Id=0, FirstName = "John", LastName = "Doe", Nationality = "American", Club = "Club A", Age = 25 },
+            
+        };
+
 
         private readonly ILogger<FootBallPlayerController> _logger;
 
@@ -36,18 +23,33 @@ namespace Example.WebApi.Controllers
             _logger = logger;
         }
 
-        [HttpGet(Name = "GetFootballPlayer")]
+        [HttpGet("GetFootballPlayer")]
         public IEnumerable<FootballPlayer> Get()
         {
-            return Enumerable.Range(1, 7).Select(index => new FootballPlayer
-            {
-                FirstName = FirstName[Random.Shared.Next(FirstName.Length)],
-                LastName = LastName[Random.Shared.Next(LastName.Length)],
-                Nationality = Nationality[Random.Shared.Next(Nationality.Length)],
-                Club = Club[Random.Shared.Next(Club.Length)],
-                Age = Random.Shared.Next(18,35)
-            })
-            .ToArray();
+            return players;
+        }
+
+        [HttpPost("PostFootballPlayer")]
+
+        public  ActionResult<FootballPlayer> Post(FootballPlayer footballPlayer) 
+        {
+
+           footballPlayer.Id = players.Count + 1;
+             players.Add(footballPlayer);
+            return CreatedAtAction(nameof(Get), new { Id = footballPlayer.Id }, footballPlayer);
+
+            
+            
+        }
+
+        [HttpPut("UpdateFootballPlayer/{id}")]
+
+        public bool Update(int id, FootballPlayer footballPlayer) {
+         if(!players.Any(x => x.Id == id)) return false;
+
+            players[id] = footballPlayer;
+            players[id].Id = id;
+            return true;
         }
     }
 }
