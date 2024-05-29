@@ -34,7 +34,7 @@ namespace Example.WebApi.Controllers
         public  ActionResult<FootballPlayer> Post(FootballPlayer footballPlayer) 
         {
 
-           footballPlayer.Id = players.Count + 1;
+           footballPlayer.Id = players.Count;
              players.Add(footballPlayer);
             return CreatedAtAction(nameof(Get), new { Id = footballPlayer.Id }, footballPlayer);
 
@@ -50,6 +50,26 @@ namespace Example.WebApi.Controllers
             players[id] = footballPlayer;
             players[id].Id = id;
             return true;
+        }
+
+
+        [HttpDelete("DeleteFootballPlayer/{id}")]
+        public ActionResult Delete(int id)
+        {
+            // Find the player with the specified id
+            var playerToDelete = players.FirstOrDefault(x => x.Id == id);
+
+            // If player not found, return 404 Not Found
+            if (playerToDelete == null)
+            {
+                return NotFound();
+            }
+
+            // Remove the player from the list
+            players.Remove(playerToDelete);
+
+            // Return 204 No Content
+            return NoContent();
         }
     }
 }
