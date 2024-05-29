@@ -67,11 +67,14 @@ namespace Example.WebApi.Controllers
                     ReasonPhrase = "Player Not Found"
                 };
             }
+            players[id] = footballPlayer;
+
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent($"Player with ID {id} has been updated."),
                 ReasonPhrase = "Player Updated"
             };
+            
         }
 
             [HttpDelete("DeleteFootballPlayer/{id}")]
