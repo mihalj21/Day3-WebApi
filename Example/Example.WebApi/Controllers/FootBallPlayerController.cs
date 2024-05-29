@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using System.Net;
 
 namespace Example.WebApi.Controllers
 {
@@ -31,45 +32,69 @@ namespace Example.WebApi.Controllers
 
         [HttpPost("PostFootballPlayer")]
 
-        public  ActionResult<FootballPlayer> Post(FootballPlayer footballPlayer) 
+        public  HttpResponseMessage Post(FootballPlayer footballPlayer) 
         {
 
-           footballPlayer.Id = players.Count;
-             players.Add(footballPlayer);
-            return CreatedAtAction(nameof(Get), new { Id = footballPlayer.Id }, footballPlayer);
+            footballPlayer.Id = players.Count > 0 ? players.Max(p => p.Id) + 1 : 1;
+            players.Add(footballPlayer);
+
+            var response = new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent($"Player with ID {footballPlayer.Id} has been created."),
+                ReasonPhrase = "Player Created"
+            };
 
             
-            
+            response.Headers.Location = new System.Uri($"{Request.Scheme}://{Request.Host}{Request.Path}/{footballPlayer.Id}");
+
+            return response;
+
+
         }
 
         [HttpPut("UpdateFootballPlayer/{id}")]
 
-        public bool Update(int id, FootballPlayer footballPlayer) {
-         if(!players.Any(x => x.Id == id)) return false;
+        public HttpResponseMessage Update(int id, FootballPlayer footballPlayer)
+        {
 
-            players[id] = footballPlayer;
-            players[id].Id = id;
-            return true;
+            var playerToUpdate = players.FirstOrDefault(x => x.Id == id);
+
+            if (playerToUpdate == null)
+            {
+                return new HttpResponseMessage(HttpStatusCode.NotFound)
+                {
+                    Content = new StringContent($"Player with ID {id} not found."),
+                    ReasonPhrase = "Player Not Found"
+                };
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent($"Player with ID {id} has been updated."),
+                ReasonPhrase = "Player Updated"
+            };
         }
 
-
-        [HttpDelete("DeleteFootballPlayer/{id}")]
-        public ActionResult Delete(int id)
+            [HttpDelete("DeleteFootballPlayer/{id}")]
+        public HttpResponseMessage Delete(int id)
         {
-            // Find the player with the specified id
+            
             var playerToDelete = players.FirstOrDefault(x => x.Id == id);
 
-            // If player not found, return 404 Not Found
+           
             if (playerToDelete == null)
             {
-                return NotFound();
+                return new HttpResponseMessage(HttpStatusCode.NotFound)
+                {
+                    Content = new StringContent($"Player with ID {id} not found."),
+                    ReasonPhrase = "Player Not Found"
+                };
             }
 
-            // Remove the player from the list
+           
             players.Remove(playerToDelete);
 
-            // Return 204 No Content
-            return NoContent();
+
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
         }
     }
 }
