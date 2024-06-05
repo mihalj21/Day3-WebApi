@@ -1,103 +1,190 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Npgsql;
 using System.Net;
+
 
 namespace Example.WebApi.Controllers
 {
 
+
+
     [ApiController]
     [Route("[controller]")]
 
-    public class FootBallPlayerController: ControllerBase   
+    public class FootBallPlayerController : ControllerBase
     {
-        
-        private static List<FootballPlayer> players = new List<FootballPlayer>
+        string connectionString = "Host = localhost; Port=5433;Database=FootballClub;Username=postgres;Password=mono";
+
+        [HttpGet]
+        [Route("checkconnection")]
+        public IActionResult CheckConnection()
         {
-            new FootballPlayer { Id=0, FirstName = "John", LastName = "Doe", Nationality = "American", Club = "Club A", Age = 25 },
-            
-        };
+            try
+            {
 
+                using (var connection = new NpgsqlConnection(connectionString))
+                {
 
-        private readonly ILogger<FootBallPlayerController> _logger;
-
-        public FootBallPlayerController(ILogger<FootBallPlayerController> logger)
-        {
-            _logger = logger;
+                    connection.Open();
+                    return Ok("Database connection successful.");
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error connecting to database: {ex.Message}");
+            }
         }
 
-        [HttpGet("GetFootballPlayer")]
-        public IEnumerable<FootballPlayer> Get()
-        {
-            return players;
-        }
+       
+
+
 
         [HttpPost("PostFootballPlayer")]
 
-        public  HttpResponseMessage Post(FootballPlayer footballPlayer) 
+        public ActionResult Post([FromBody] FootballPlayer player)
         {
-
-            footballPlayer.Id = players.Count > 0 ? players.Max(p => p.Id) + 1 : 1;
-            players.Add(footballPlayer);
-
-            var response = new HttpResponseMessage(HttpStatusCode.Created)
+            try
             {
-                Content = new StringContent($"Player with ID {footballPlayer.Id} has been created."),
-                ReasonPhrase = "Player Created"
-            };
-
-            
-            response.Headers.Location = new System.Uri($"{Request.Scheme}://{Request.Host}{Request.Path}/{footballPlayer.Id}");
-
-            return response;
+                using var connection = new NpgsqlConnection(connectionString);
+                var commandText = "INSERT INTO \"FootballPlayer\"VALUES(@id,@FirstName,@LastName,@Nationality,@Age,@ClubId);";
+                using var command = new NpgsqlCommand(commandText, connection);
 
 
-        }
+                command.Parameters.AddWithValue("@id", NpgsqlTypes.NpgsqlDbType.Uuid, Guid.NewGuid());
+                command.Parameters.AddWithValue("@FirstName", player.FirstName);
+                command.Parameters.AddWithValue("@LastName", player.LastName);
+                command.Parameters.AddWithValue("@Nationality", player.Nationality);
+                command.Parameters.AddWithValue("@Age", player.Age);
+                command.Parameters.AddWithValue("@ClubId", player.ClubId ?? (object)DBNull.Value);
 
-        [HttpPut("UpdateFootballPlayer/{id}")]
 
-        public HttpResponseMessage Update(int id, FootballPlayer footballPlayer)
-        {
+                connection.Open();
 
-            var playerToUpdate = players.FirstOrDefault(x => x.Id == id);
+                var numberOfCommits = command.ExecuteNonQuery();
 
-            if (playerToUpdate == null)
-            {
-                return new HttpResponseMessage(HttpStatusCode.NotFound)
-                {
-                    Content = new StringContent($"Player with ID {id} not found."),
-                    ReasonPhrase = "Player Not Found"
-                };
+                if (numberOfCommits == 0) {
+                    return NotFound();
+                }
+                return Ok("Successfully added");
+
+
             }
-            players[id] = footballPlayer;
-
-            return new HttpResponseMessage(HttpStatusCode.OK)
+            catch (Exception ex)
             {
-                Content = new StringContent($"Player with ID {id} has been updated."),
-                ReasonPhrase = "Player Updated"
-            };
-            
-        }
-
-            [HttpDelete("DeleteFootballPlayer/{id}")]
-        public HttpResponseMessage Delete(int id)
-        {
-            
-            var playerToDelete = players.FirstOrDefault(x => x.Id == id);
-
-           
-            if (playerToDelete == null)
-            {
-                return new HttpResponseMessage(HttpStatusCode.NotFound)
-                {
-                    Content = new StringContent($"Player with ID {id} not found."),
-                    ReasonPhrase = "Player Not Found"
-                };
+                return StatusCode(500, $"Internal server error: {ex.Message}");
             }
 
-           
-            players.Remove(playerToDelete);
 
 
-            return new HttpResponseMessage(HttpStatusCode.NoContent);
         }
-    }
+        [HttpGet("GetFootballPlayerByGUID")]
+
+        public ActionResult GetById(Guid id) {
+
+
+            try { 
+            var footballPlayer = new FootballPlayer();
+                using var connection = new NpgsqlConnection(connectionString);
+            var commandText = "SELECT * FROM \"FootballPlayer\" WHERE\"Id\" = @id;";
+            using var command = new NpgsqlCommand(commandText, connection);
+
+                command.Parameters.AddWithValue("@id", id);
+
+                connection.Open();
+
+                using var reader = command.ExecuteReader();
+
+                if (reader.HasRows) {
+                    reader.Read();
+
+                    footballPlayer = new FootballPlayer
+                    {
+                        Id = Guid.Parse(reader[0].ToString()),
+                        FirstName = reader[1].ToString(),
+                        LastName = reader[2].ToString(),
+                        Nationality = reader[3].ToString(),
+                        Age = reader[4] == DBNull.Value ? 0 : Convert.ToInt32(reader[4]),
+                        ClubId = reader[5] == DBNull.Value ? Guid.Empty : Guid.Parse(reader[5].ToString())
+                        
+                    };
+                    
+                }
+                if (footballPlayer == null)
+                {
+                    return NotFound();
+                }
+                return Ok(footballPlayer);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Could not get player by ID: {ex.Message}");
+            }
+        }
+
+
+        [HttpGet("GetFootballPlayers")]
+
+        public ActionResult Get()
+        {
+            try
+            {
+                var footballPlayers = new List<FootballPlayerInfo>();
+
+                using (var connection = new NpgsqlConnection(connectionString))
+                using (var command = new NpgsqlCommand(@"SELECT fp.*, c.""Name"" AS ""ClubName"", c.""Country"" 
+                                                FROM ""FootballPlayer"" fp
+                                                INNER JOIN ""Club"" c ON fp.""ClubId"" = c.""Id"";",connection))
+                {
+                    connection.Open();
+
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            var footballPlayer = new FootballPlayerInfo
+                            {
+                                Id = Guid.Parse(reader[0].ToString()),
+                                FirstName = reader[1].ToString(),
+                                LastName = reader[2].ToString(),
+                                Nationality = reader[3].ToString(),
+                                Age = reader[4] == DBNull.Value ? 0 : Convert.ToInt32(reader[4]),
+                                ClubId = Guid.Parse(reader["ClubId"].ToString()),
+                                ClubName = reader["ClubName"].ToString(),
+                                Country = reader["Country"].ToString()
+                            };
+
+                            footballPlayers.Add(footballPlayer);
+                        }
+                    }
+                }
+
+                return Ok(footballPlayers);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Could not get football players: {ex.Message}");
+            }
+        }
+
+        [HttpDelete("{id}")]
+        public IActionResult DeletePlayer(Guid id)
+        {
+            using var connection = new NpgsqlConnection(connectionString);
+            var commandText = "DELETE FROM \"FootballPlayer\" WHERE \"Id\" = @Id;";
+            using var command = new NpgsqlCommand(commandText, connection);
+            command.Parameters.AddWithValue("@Id", id);
+
+            connection.Open();
+            int rowsAffected = command.ExecuteNonQuery();
+
+            if (rowsAffected > 0)
+            {
+                return Ok("Player deleted successfully");
+            }
+            else
+            {
+                return NotFound();
+            }
+        }
+    } 
 }
